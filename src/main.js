@@ -4,6 +4,7 @@ import App from "./App.vue";
 // Element Plus
 import ElementPlus from "element-plus";
 import "element-plus/dist/index.css";
+import "./index.css";
 
 // Vue Router
 import router from "./router";

@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { updateArticle } from '@/api/article'
 
@@ -7,6 +7,7 @@ const id = ref('')
 const selectedField = ref('')
 const newValue = ref('')
 const result = ref(null)
+const updating = ref(false)
 
 const fields = [
   { label: '標題', value: 'title' },
@@ -27,23 +28,19 @@ const fields = [
   { label: '文章來源', value: 'article_type' },
 ]
 
-// 切換欄位時，清空輸入
-const handleFieldChange = () => {
-  const field = fields.find((f) => f.value === selectedField.value)
+const currentField = computed(() => fields.find((f) => f.value === selectedField.value))
 
-  if (field && field.type === 'number') {
-    newValue.value = null // ✅ 避免 el-input-number 報錯
-  } else {
-    newValue.value = ''
-  }
+const handleFieldChange = () => {
+  newValue.value = currentField.value?.type === 'number' ? null : ''
 }
 
 const handleUpdate = async () => {
   if (!id.value || !selectedField.value || newValue.value === '' || newValue.value === null) {
-    ElMessage.warning('請輸入完整資訊')
+    ElMessage.warning('請填寫完整資訊')
     return
   }
 
+  updating.value = true
   try {
     const { data } = await updateArticle({
       id: id.value,
@@ -51,69 +48,138 @@ const handleUpdate = async () => {
         [selectedField.value]: newValue.value,
       },
     })
-
-    console.log('📝 更新 API Response:', data) // ✅ Debug
     result.value = data
-
     if (data.success) {
       ElMessage.success(data.message)
     } else {
       ElMessage.error(data.message)
     }
   } catch (err) {
-    console.error('❌ 更新 API 呼叫失敗:', err)
-    ElMessage.error('更新失敗')
+    ElMessage.error('連線錯誤，更新失敗')
+  } finally {
+    updating.value = false
   }
 }
 </script>
 
 <template>
-  <div>
-    <!-- ID 輸入 -->
-    <el-input v-model="id" placeholder="請輸入文章 ID" style="margin-bottom: 10px" />
+  <div class="page-container">
+    <h2 class="section-title">更新文章內容</h2>
 
-    <!-- 選擇欄位 -->
-    <el-select
-      v-model="selectedField"
-      placeholder="選擇要更新的欄位"
-      style="margin-bottom: 10px; width: 100%"
-      @change="handleFieldChange"
-    >
-      <el-option
-        v-for="field in fields"
-        :key="field.value"
-        :label="field.label"
-        :value="field.value"
-      />
-    </el-select>
+    <el-card class="update-card" shadow="never">
+      <el-form label-position="top" class="update-form">
+        <el-form-item label="文章 ID" required>
+          <el-input v-model="id" placeholder="例如: 12345678" clearable />
+        </el-form-item>
 
-    <!-- 動態輸入框 -->
-    <div v-if="selectedField">
-      <!-- Radio (sentiment_tag) -->
-      <el-radio-group v-if="selectedField === 'sentiment_tag'" v-model="newValue">
-        <el-radio label="p">正面</el-radio>
-        <el-radio label="n">負面</el-radio>
-        <el-radio label="m">中立</el-radio>
-      </el-radio-group>
+        <el-form-item label="選取要更新的欄位" required>
+          <el-select
+            v-model="selectedField"
+            placeholder="請選擇欄位"
+            @change="handleFieldChange"
+            filterable
+            style="width: 100%"
+          >
+            <el-option
+              v-for="field in fields"
+              :key="field.value"
+              :label="field.label"
+              :value="field.value"
+            />
+          </el-select>
+        </el-form-item>
 
-      <!-- 數字輸入 (InputNumber) -->
-      <el-input-number
-        v-else-if="fields.find((f) => f.value === selectedField && f.type === 'number')"
-        v-model="newValue"
-        :min="0"
-        style="width: 100%"
-      />
+        <el-form-item v-if="selectedField" label="新的值" required>
+          <!-- Radio (sentiment_tag) -->
+          <el-radio-group v-if="selectedField === 'sentiment_tag'" v-model="newValue">
+            <el-radio-button label="p">正面</el-radio-button>
+            <el-radio-button label="n">負面</el-radio-button>
+            <el-radio-button label="m">中立</el-radio-button>
+          </el-radio-group>
 
-      <!-- 一般輸入框 -->
-      <el-input v-else v-model="newValue" placeholder="請輸入新的值" />
-    </div>
+          <!-- 數字輸入 (InputNumber) -->
+          <el-input-number
+            v-else-if="currentField?.type === 'number'"
+            v-model="newValue"
+            :min="0"
+            controls-position="right"
+            style="width: 100%"
+          />
 
-    <!-- 更新按鈕 -->
-    <el-button type="primary" style="margin-top: 15px" @click="handleUpdate"> 更新 </el-button>
+          <!-- 一般輸入框 -->
+          <el-input
+            v-else
+            v-model="newValue"
+            type="textarea"
+            :rows="3"
+            placeholder="請輸入內容..."
+          />
+        </el-form-item>
 
-    <!-- 更新結果 (JSON 輸出) -->
-    <div v-if="result" style="margin-top: 15px">
-      <pre>{{ result }}</pre>
-    </div>
+        <el-form-item class="form-actions">
+          <el-button type="primary" size="large" @click="handleUpdate" :loading="updating">
+            確認並更新
+          </el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
+    <!-- 更新結果 -->
+    <transition name="el-fade-in">
+      <el-card v-if="result" class="result-card" shadow="never">
+        <template #header>
+          <div class="result-header">
+            <span>更新狀態回報</span>
+            <el-tag :type="result.success ? 'success' : 'danger'" effect="dark">
+              {{ result.success ? '成功' : '失敗' }}
+            </el-tag>
+          </div>
+        </template>
+        <pre class="result-body">{{ JSON.stringify(result, null, 2) }}</pre>
+      </el-card>
+    </transition>
   </div>
 </template>
+
+<style scoped>
+.update-card {
+  max-width: 600px;
+  background: var(--card-bg);
+}
+
+.update-form {
+  padding: 10px 0;
+}
+
+.form-actions {
+  margin-top: 32px;
+  margin-bottom: 0;
+}
+
+.form-actions :deep(.el-button) {
+  width: 100%;
+}
+
+.result-card {
+  margin-top: 24px;
+  max-width: 600px;
+  border-left: 4px solid var(--primary-color);
+}
+
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+}
+
+.result-body {
+  margin: 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  background: #f8fafc;
+  padding: 12px;
+  border-radius: 4px;
+}
+</style>
