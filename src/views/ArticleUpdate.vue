@@ -11,21 +11,12 @@ const updating = ref(false)
 
 const fields = [
   { label: '標題', value: 'title' },
+  { label: '新聞簡介', value: 'description' }, // 新增：對應 description
   { label: '內文', value: 'content' },
-  { label: '網站名稱', value: 's_name' },
-  { label: '頻道名稱', value: 's_area_name' },
-  { label: '原始網址', value: 'page_url' },
+  { label: '來源名稱', value: 'sourceName' },  // 修改：舊版是 s_name，新版建議用 sourceName
   { label: '作者', value: 'author' },
-  { label: '主文ID', value: 'main_id' },
-  { label: '正面情緒分數', value: 'positive_percentage', type: 'number' },
-  { label: '負面情緒分數', value: 'negative_percentage', type: 'number' },
-  { label: '回文數', value: 'comment_count', type: 'number' },
-  { label: '觀看數', value: 'view_count', type: 'number' },
-  { label: '分享數', value: 'used_count', type: 'number' },
-  { label: '文章類型', value: 'content_type' },
-  { label: '情緒標籤', value: 'sentiment_tag', type: 'radio' },
-  { label: '關鍵字命中次數', value: '_hit_num', type: 'number' },
-  { label: '文章來源', value: 'article_type' },
+  { label: '原文網址', value: 'url' },         // 修改：舊版是 page_url
+  { label: 'AI 摘要', value: 'summary' }       // 新增：可以直接修訂 AI 產生的摘要
 ]
 
 const currentField = computed(() => fields.find((f) => f.value === selectedField.value))
