@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onUnmounted } from 'vue' // 記得引入 onUnmounted 以防記憶體洩漏
 import { ElMessage } from 'element-plus'
 import { ChatLineSquare } from '@element-plus/icons-vue'
 import { fetchSummary } from '@/api/summary'
@@ -10,9 +10,38 @@ const startTime = ref('00:00:00')
 const endTime = ref('23:59:59')
 
 // 定義資料變數
-const articleList = ref([])      // 文章列表
-const overallSummary = ref('')   // 整體摘要內容
+const articleList = ref([])      
+const overallSummary = ref('')   
 const loading = ref(false)
+
+// [新增] Loading 動畫相關變數
+const loadingDots = ref('')
+let loadingInterval = null
+
+// [新增] 啟動動畫
+const startLoadingAnimation = () => {
+  let count = 0
+  loadingDots.value = ''
+  loadingInterval = setInterval(() => {
+    count = (count + 1) % 4
+    // 產生 ., .., ... 的循環
+    loadingDots.value = '.'.repeat(count)
+  }, 500) // 每 0.5 秒切換一次，讓動畫流暢一點
+}
+
+// [新增] 停止動畫
+const stopLoadingAnimation = () => {
+  if (loadingInterval) {
+    clearInterval(loadingInterval)
+    loadingInterval = null
+    loadingDots.value = ''
+  }
+}
+
+// 確保元件銷毀時停止動畫
+onUnmounted(() => {
+  stopLoadingAnimation()
+})
 
 const buildRange = () => {
   if (!startDate.value || !endDate.value) return { startTime: null, endTime: null }
@@ -34,11 +63,13 @@ const handleFetchSummary = async () => {
   // 清空舊資料
   articleList.value = []
   overallSummary.value = ''
+  
+  // [新增] 開始動畫
+  startLoadingAnimation()
 
   try {
     const { data } = await fetchSummary({ startTime, endTime })
     
-    // 根據新的後端格式接收資料
     if (data.success) {
       overallSummary.value = data.overallSummary
       articleList.value = data.articles
@@ -51,6 +82,8 @@ const handleFetchSummary = async () => {
     console.error(err)
     ElMessage.error('摘要產生失敗，請稍後再試')
   } finally {
+    // [新增] 停止動畫 (無論成功失敗都要停)
+    stopLoadingAnimation()
     loading.value = false
   }
 }
@@ -83,6 +116,17 @@ const handleFetchSummary = async () => {
         </div>
       </div>
     </el-card>
+
+    <div v-if="loading" class="loading-section">
+      <el-card class="box-card" shadow="never">
+        <div class="loading-container">
+          <span class="loading-text">摘要生成中{{ loadingDots }}</span>
+        </div>
+      </el-card>
+    </div>
+
+    <div v-if="overallSummary" class="overall-summary-section">
+      </div>
 
     <div v-if="overallSummary" class="overall-summary-section">
       <el-card class="box-card" shadow="hover">
@@ -146,4 +190,25 @@ const handleFetchSummary = async () => {
 .item-header { display: flex; justify-content: space-between; }
 .title-section h4 { margin: 0 0 10px 0; font-size: 1.1rem; color: #303133; }
 .content-section p { color: #606266; font-size: 0.9rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* [新增] Loading 樣式 */
+.loading-section {
+  margin-bottom: 30px;
+  text-align: center;
+}
+
+.loading-container {
+  padding: 40px 0; /* 增加一點上下留白，讓畫面不擁擠 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.loading-text {
+  font-size: 2rem;       /* 字體比摘要(1rem)大兩倍 */
+  font-weight: bold;     /* 加粗 */
+  color: #409EFF;        /* 使用 Element Plus 的主色調 */
+  letter-spacing: 2px;   /* 增加字距，看起來更有質感 */
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
+}
 </style>
