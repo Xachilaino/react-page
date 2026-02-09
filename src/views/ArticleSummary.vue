@@ -1,35 +1,40 @@
 <script setup>
-import { ref, onUnmounted } from 'vue' // 記得引入 onUnmounted 以防記憶體洩漏
+import { ref, onMounted, onUnmounted } from 'vue' // 引入生命週期勾子
 import { ElMessage } from 'element-plus'
 import { ChatLineSquare } from '@element-plus/icons-vue'
-import { fetchSummary } from '@/api/summary'
+import { fetchSummary } from '@/api/summary' // 引入摘要 API
+import { checkAndBackfill } from '@/api/article' // 引入補檔 API
 
+// 1. 定義時間篩選相關變數
 const startDate = ref('')
 const endDate = ref('')
 const startTime = ref('00:00:00')
 const endTime = ref('23:59:59')
 
-// 定義資料變數
-const articleList = ref([])      
-const overallSummary = ref('')   
-const loading = ref(false)
+// 2. 定義資料與狀態變數
+const articleList = ref([])      // 文章列表
+const overallSummary = ref('')   // 整體摘要內容
+const loading = ref(false)       // 載入狀態
 
-// [新增] Loading 動畫相關變數
-const loadingDots = ref('')
-let loadingInterval = null
+// 3. 定義 Loading 動畫相關變數
+const loadingDots = ref('')      // 動態點點字串
+let loadingInterval = null       // 動畫計時器
 
-// [新增] 啟動動畫
+/**
+ * 啟動點點動畫：每 0.5 秒切換一次 . .. ...
+ */
 const startLoadingAnimation = () => {
   let count = 0
   loadingDots.value = ''
   loadingInterval = setInterval(() => {
     count = (count + 1) % 4
-    // 產生 ., .., ... 的循環
     loadingDots.value = '.'.repeat(count)
-  }, 500) // 每 0.5 秒切換一次，讓動畫流暢一點
+  }, 500)
 }
 
-// [新增] 停止動畫
+/**
+ * 停止點點動畫並清除計時器
+ */
 const stopLoadingAnimation = () => {
   if (loadingInterval) {
     clearInterval(loadingInterval)
@@ -38,11 +43,31 @@ const stopLoadingAnimation = () => {
   }
 }
 
-// 確保元件銷毀時停止動畫
+/**
+ * 元件掛載時執行的邏輯
+ */
+onMounted(() => {
+  console.log('正在檢查新聞資料完整性...') // 解決你之前沒印出的問題
+  // 觸發後端檢查並補檔 (每日熱門新聞)
+  checkAndBackfill()
+    .then(() => {
+      console.log('後端檢查任務已觸發 (若缺資料將自動補檔)')
+    })
+    .catch(err => {
+      console.warn('觸發補檔任務失敗 (請確認 article.js 已更新 checkAndBackfill 方法)', err)
+    })
+})
+
+/**
+ * 元件卸載時清除計時器，防止記憶體洩漏
+ */
 onUnmounted(() => {
   stopLoadingAnimation()
 })
 
+/**
+ * 輔助方法：建構時間範圍字串
+ */
 const buildRange = () => {
   if (!startDate.value || !endDate.value) return { startTime: null, endTime: null }
   return {
@@ -51,6 +76,9 @@ const buildRange = () => {
   }
 }
 
+/**
+ * 核心方法：向後端請求摘要
+ */
 const handleFetchSummary = async () => {
   const { startTime, endTime } = buildRange()
 
@@ -59,15 +87,14 @@ const handleFetchSummary = async () => {
     return
   }
 
+  // 設定載入狀態並啟動動畫
   loading.value = true
-  // 清空舊資料
   articleList.value = []
   overallSummary.value = ''
-  
-  // [新增] 開始動畫
   startLoadingAnimation()
 
   try {
+    // 呼叫後端 API (後端 GeminiService 會使用 gemini-2.5-flash 處理)
     const { data } = await fetchSummary({ startTime, endTime })
     
     if (data.success) {
@@ -82,7 +109,7 @@ const handleFetchSummary = async () => {
     console.error(err)
     ElMessage.error('摘要產生失敗，請稍後再試')
   } finally {
-    // [新增] 停止動畫 (無論成功失敗都要停)
+    // 停止動畫並解除載入狀態
     stopLoadingAnimation()
     loading.value = false
   }
